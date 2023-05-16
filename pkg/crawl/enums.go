@@ -31,10 +31,11 @@ const (
 type ReqType string
 
 const (
-	ReqTypeEmpty ReqType = ""
-	ReqType01    ReqType = "01"
-	ReqType02    ReqType = "02"
-	ReqTypeIsG1          = "isg1"
+	ReqTypeNoEncrypt ReqType = "NoEncrypt"
+	ReqTypeEmpty     ReqType = ""
+	ReqType01        ReqType = "01"
+	ReqType02        ReqType = "02"
+	ReqTypeIsG1      ReqType = "isg1"
 )
 
 type FuncCode string

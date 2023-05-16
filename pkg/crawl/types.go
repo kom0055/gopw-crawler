@@ -58,8 +58,8 @@ func TransEncodee(data Encodee) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	paramStr := url.QueryEscape(string(paramBytes))
-	signDataBytes := []byte(paramStr)
+	signData := url.QueryEscape(string(paramBytes))
+	signDataBytes := []byte(signData)
 	switch data.GetReqType() {
 	case ReqTypeEmpty, ReqType01, ReqType02, ReqTypeIsG1:
 		pubKeyHexCopy := make([]byte, len(pubkeyHex))
@@ -72,11 +72,12 @@ func TransEncodee(data Encodee) (string, string, error) {
 		if err != nil {
 			return "", "", err
 		}
+		signData = hex.EncodeToString(signDataBytes)
 	}
 	hasher := md5.New()
 	hasher.Write(signDataBytes)
 	sign := hasher.Sum(nil)
-	return hex.EncodeToString(sign), hex.EncodeToString(signDataBytes), nil
+	return hex.EncodeToString(sign), signData, nil
 }
 
 func NewBizParam(srvCode SrvCode, chanCode ChannelCode, funcCode FuncCode, isToken IsToken, isBindSell IsBindSell,

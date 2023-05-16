@@ -112,7 +112,7 @@ func (c *DailyPowerCrawler) Crawl(ctx context.Context, startDate, endDate time.T
 	end := endDate
 	start := startDate
 
-	downloadOpts := []DownloadOption{}
+	downloadOpts := map[string]DownloadOption{}
 	for cursor := end; !cursor.Before(start); cursor = cursor.AddDate(0, -1, 0) {
 		for page, total := 1, 2; page < total; page++ {
 			time.Sleep(callInterval)
@@ -126,12 +126,15 @@ func (c *DailyPowerCrawler) Crawl(ctx context.Context, startDate, endDate time.T
 			total = int(math.Floor(float64(queryResp.TotalNum) / float64(defaultPageNumber)))
 			for i := range queryResp.ConsPqList {
 				consPq := queryResp.ConsPqList[i]
-				downloadOpts = append(downloadOpts, DownloadOption{
+				d := DownloadOption{
+					FileName:  fmt.Sprintf("%s/%s-%s-%s.xls", c.DownloadPath, cursor.Format("2006-01"), consPq.VoltCode, consPq.ConsName),
 					LoginInfo: loginResp,
 					QueryDate: cursor,
 					ConsRq:    consPq,
 					LogId:     logId,
-				})
+				}
+				downloadOpts[d.FileName] = d
+
 			}
 
 		}
@@ -146,8 +149,8 @@ func (c *DailyPowerCrawler) Crawl(ctx context.Context, startDate, endDate time.T
 		wg := sync.WaitGroup{}
 		for i := range downloadOpts {
 			downloadOpt := downloadOpts[i]
+			wg.Add(1)
 			go func() {
-				wg.Add(1)
 				defer wg.Done()
 				ctrlCh <- struct{}{}
 				defer func() {
@@ -279,26 +282,31 @@ func (c *DailyPowerCrawler) Download(ctx context.Context, downloadOpt DownloadOp
 	consRq := downloadOpt.ConsRq
 	loginInfo := downloadOpt.LoginInfo
 	logId := downloadOpt.LogId
+	fileName := downloadOpt.FileName
 	param := NewRequest(NewDownloadParam(loginInfo, queryDate, consRq, logId))
 	b, err := json.Marshal(param)
 	if err != nil {
 		return err
 	}
+	//tmpUrl := url.URL{Path: string(b)}
+	//s := tmpUrl.EscapedPath()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiUrl, nil)
 	if err != nil {
 		return err
 	}
+	//req.URL.RawQuery = fmt.Sprintf("jsonData=%v", s)
 	q := req.URL.Query()
 	q.Add("jsonData", string(b))
 	req.URL.RawQuery = q.Encode()
+
 	WrapRequest(req)
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	f, err := os.Create(fmt.Sprintf("%s/%s-%s-%s.xls", c.DownloadPath, queryDate.Format("2006-01"), consRq.VoltCode, consRq.ConsName))
+	f, err := os.Create(fileName)
 	if err != nil {
 		return err
 	}

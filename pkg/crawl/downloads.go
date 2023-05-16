@@ -12,7 +12,7 @@ func NewDownloadParam(loginInfo *LoginResp, queryDate time.Time, consRq ConsPq, 
 	y, m, _ := queryDate.Date()
 	startDate := time.Date(y, m, 0, 0, 0, 0, 0, time.Local)
 	return &DownloadParam{
-		BizParam:     NewBizParam(QuerySrvCode, ChannelCodeGOPW, FuncCode54, IsToken1, IsBindSell1, HasRightTrue, logId),
+		BizParam:     NewBizParam(DownloadSrcCode, ChannelCodeGOPW, FuncCode54, IsToken1, IsBindSell1, HasRightTrue, logId),
 		EspFlowId:    strings.ReplaceAll(uuid.NewString(), "-", ""),
 		Token:        loginInfo.Token,
 		MobileNo:     loginInfo.MobileNo,
@@ -46,47 +46,48 @@ func NewDownloadParam(loginInfo *LoginResp, queryDate time.Time, consRq ConsPq, 
 
 type DownloadParam struct {
 	BizParam     `json:",inline"`
-	EspFlowId    string `yaml:"espFlowId"`
-	Token        string `yaml:"token"`
-	MobileNo     string `yaml:"mobileNo"`
-	LoginMobile  string `yaml:"loginMobile"`
-	EspRsvField1 string `yaml:"espRsvField1"`
-	EspRsvField2 string `yaml:"espRsvField2"`
-	EspRsvField3 string `yaml:"espRsvField3"`
-	EspTimestamp int64  `yaml:"espTimestamp"`
-	EspSign      string `yaml:"espSign"`
+	EspFlowId    string `json:"espFlowId"`
+	Token        string `json:"token"`
+	MobileNo     string `json:"mobileNo"`
+	LoginMobile  string `json:"loginMobile"`
+	EspRsvField1 string `json:"espRsvField1"`
+	EspRsvField2 string `json:"espRsvField2"`
+	EspRsvField3 string `json:"espRsvField3"`
+	EspTimestamp int64  `json:"espTimestamp"`
+	EspSign      string `json:"espSign"`
 
 	PageNo   string `json:"pageNo"`
 	PageSize string `json:"pageSize"`
 
-	EspInformation EspInformation `yaml:"espInformation"`
-	Header         Header         `yaml:"header"`
+	EspInformation EspInformation `json:"espInformation"`
+	Header         Header         `json:"header"`
 }
 
 type EspInformation struct {
-	DevType     string `yaml:"devType"`
-	BeginDate   string `yaml:"beginDate"`
-	MgtOrgCode  string `yaml:"mgtOrgCode"`
-	CustNo      string `yaml:"custNo"`
-	EndDate     string `yaml:"endDate"`
-	MeasAssetNo string `yaml:"measAssetNo"`
-	DisplayType string `yaml:"displayType"`
-	QueryType   string `yaml:"queryType"`
-	TmnlAssetNo string `yaml:"tmnlAssetNo"`
+	DevType     string `json:"devType"`
+	BeginDate   string `json:"beginDate"`
+	MgtOrgCode  string `json:"mgtOrgCode"`
+	CustNo      string `json:"custNo"`
+	EndDate     string `json:"endDate"`
+	MeasAssetNo string `json:"measAssetNo"`
+	DisplayType string `json:"displayType"`
+	QueryType   string `json:"queryType"`
+	TmnlAssetNo string `json:"tmnlAssetNo"`
 }
 
 type Header struct {
-	Bizcode    string `yaml:"bizcode"`
-	Reptag     string `yaml:"reptag"`
-	Accesscode string `yaml:"accesscode"`
-	Sessionid  string `yaml:"sessionid"`
+	Bizcode    string `json:"bizcode"`
+	Reptag     string `json:"reptag"`
+	Accesscode string `json:"accesscode"`
+	Sessionid  string `json:"sessionid"`
 }
 
 func (l DownloadParam) GetReqType() ReqType {
-	return ReqType01
+	return ReqTypeNoEncrypt
 }
 
 type DownloadOption struct {
+	FileName  string
 	LoginInfo *LoginResp
 	QueryDate time.Time
 	ConsRq    ConsPq
