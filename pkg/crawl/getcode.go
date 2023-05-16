@@ -1,24 +1,10 @@
 package crawl
 
-import (
-	"time"
-
-	"github.com/google/uuid"
-)
-
-func NewGetCodeParam() Encodee {
+func NewGetCodeParam(logId string) Encodee {
 	return GetCodeParam{
-		BizParam: BizParam{
-			SrvCode:     GetCodeSrvCode,
-			LogId:       uuid.NewString(),
-			SerialNo:    time.Now().Format(timeFmt),
-			ChannelCode: ChannelCodeGOPW,
-			FuncCode:    FuncCode54,
-			IsToken:     IsToken0,
-			IsBindSell:  IsBindSellP1,
-			HasRight:    HasRightFalse,
-		},
+		BizParam: NewBizParam(GetCodeSrvCode, ChannelCodeGOPW, FuncCode54, IsToken0, IsBindSellN1, HasRightFalse, logId),
 	}
+
 }
 
 type GetCodeParam struct {
@@ -27,14 +13,6 @@ type GetCodeParam struct {
 
 func (g GetCodeParam) GetReqType() ReqType {
 	return ReqType01
-}
-
-func (g GetCodeParam) GetSrvCode() SrvCode {
-	return GetCodeSrvCode
-}
-
-func (g GetCodeParam) GetChannelCode() ChannelCode {
-	return ChannelCodeGOPW
 }
 
 type GetCodeResp struct {

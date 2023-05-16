@@ -3,7 +3,13 @@ package crawl
 import (
 	"bytes"
 	"crypto/des"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"errors"
+	"fmt"
 )
 
 func EcbDesEncrypt(origData, key []byte) ([]byte, error) {
@@ -94,4 +100,27 @@ func PKCS5Padding(src []byte, blockSize int) []byte {
 	padding := blockSize - len(src)%blockSize
 	padtext := bytes.Repeat([]byte{byte(padding)}, padding)
 	return append(src, padtext...)
+}
+
+func EncryptPasswd(passwd string) (string, error) {
+	p, _ := pem.Decode([]byte(publicKey))
+	if p == nil {
+		return "", fmt.Errorf("public key error")
+	}
+	pubKeyAny, err := x509.ParsePKIXPublicKey(p.Bytes)
+	if err != nil {
+		return "", err
+	}
+	pubKey, ok := pubKeyAny.(*rsa.PublicKey)
+	if !ok {
+		return "", fmt.Errorf("not ok")
+	}
+	passwdBytes := []byte(passwd)
+	encryptedPasswd, err := rsa.EncryptPKCS1v15(rand.Reader, pubKey, passwdBytes)
+	if err != nil {
+		return "", err
+	}
+	encryptedPasswdStr := base64.StdEncoding.EncodeToString(encryptedPasswd)
+	return encryptedPasswdStr, nil
+
 }

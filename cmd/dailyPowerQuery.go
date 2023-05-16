@@ -44,6 +44,9 @@ func NewDailyPowerQueryCmd() *cobra.Command {
 			}
 		},
 	}
+	if err := opt.Init(); err != nil {
+		log.Fatalf("Failed to init options: %v", err)
+	}
 	opt.AddAllFlags(dailyPowerQueryCmd.Flags())
 	return dailyPowerQueryCmd
 }

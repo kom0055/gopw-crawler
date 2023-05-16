@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/tjfoc/gmsm/sm2"
 	"github.com/tjfoc/gmsm/x509"
 )
@@ -65,9 +64,6 @@ func TransEncodee(data Encodee) (string, string, error) {
 	case ReqTypeEmpty, ReqType01, ReqType02, ReqTypeIsG1:
 		pubKeyHexCopy := make([]byte, len(pubkeyHex))
 		copy(pubKeyHexCopy, pubkeyHex)
-		//if len(pubKeyHexCopy) > 128 {
-		//	pubKeyHexCopy = pubKeyHexCopy[:128]
-		//}
 		pubKey, err := x509.ReadPublicKeyFromHex(string(pubKeyHexCopy))
 		if err != nil {
 			return "", "", err
@@ -83,6 +79,20 @@ func TransEncodee(data Encodee) (string, string, error) {
 	return hex.EncodeToString(sign), hex.EncodeToString(signDataBytes), nil
 }
 
+func NewBizParam(srvCode SrvCode, chanCode ChannelCode, funcCode FuncCode, isToken IsToken, isBindSell IsBindSell,
+	hasRight HasRight, logId string) BizParam {
+	return BizParam{
+		SrvCode:     srvCode,
+		LogId:       logId,
+		SerialNo:    time.Now().Format(timeFmt),
+		ChannelCode: chanCode,
+		FuncCode:    funcCode,
+		IsToken:     isToken,
+		IsBindSell:  isBindSell,
+		HasRight:    hasRight,
+	}
+}
+
 type BizParam struct {
 	SrvCode     SrvCode     `json:"srvCode"`
 	LogId       string      `json:"logId"`
@@ -94,54 +104,12 @@ type BizParam struct {
 	HasRight    HasRight    `json:"hasRight"`
 }
 
-func NewLoginParam(mobile, randomCode, passwd string) *LoginParam {
-	return &LoginParam{
-		BizParam: BizParam{
-			SrvCode:     LoginSrvCode,
-			LogId:       uuid.NewString(),
-			SerialNo:    time.Now().Format(timeFmt),
-			ChannelCode: ChannelCodeGOPW,
-			FuncCode:    FuncCode54,
-			IsToken:     IsToken0,
-			IsBindSell:  IsBindSellP1,
-			HasRight:    HasRightFalse,
-		},
-		MobileNo:    mobile,
-		LoginMobile: mobile,
-		RandomCode:  randomCode,
-		PassWord:    passwd,
-	}
+func (g BizParam) GetSrvCode() SrvCode {
+	return g.SrvCode
 }
 
-type LoginParam struct {
-	BizParam    `json:",inline"`
-	MobileNo    string `json:"mobileNo"`
-	LoginMobile string `json:"loginMobile"`
-	RandomCode  string `json:"randomCode"`
-	PassWord    string `json:"passWord"`
-}
-
-func NewLogoutParam(mobile string) *LogoutParam {
-	return &LogoutParam{
-		BizParam: BizParam{
-			SrvCode:     LogoutSrvCode,
-			LogId:       uuid.NewString(),
-			SerialNo:    time.Now().Format(timeFmt),
-			ChannelCode: ChannelCodeGOPW,
-			FuncCode:    FuncCode54,
-			IsToken:     IsToken0,
-			IsBindSell:  IsBindSellP1,
-			HasRight:    HasRightFalse,
-		},
-		MobileNo:    mobile,
-		LoginMobile: mobile,
-	}
-}
-
-type LogoutParam struct {
-	BizParam    `json:",inline"`
-	MobileNo    string `json:"mobileNo"`
-	LoginMobile string `json:"loginMobile"`
+func (g BizParam) GetChannelCode() ChannelCode {
+	return g.ChannelCode
 }
 
 type Response[T any] struct {
@@ -178,6 +146,6 @@ type BizResp struct {
 	RtnCode RtnCode `json:"rtnCode"`
 }
 
-type LogoutResp struct {
-	BizResp `json:",inline"`
+func (r BizResp) IsOK() bool {
+	return r.RtnCode == RtnCodeOK
 }

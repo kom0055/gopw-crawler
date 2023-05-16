@@ -4,9 +4,24 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"math"
 	"net/http"
 	"net/http/cookiejar"
+	"os"
 	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/hashicorp/go-multierror"
+)
+
+const (
+	logoutInterval = 10 * time.Second
+	callInterval   = 500 * time.Millisecond
 )
 
 var (
@@ -29,8 +44,11 @@ var (
 )
 
 type DailyPowerCrawler struct {
-	client http.Client
-	once   sync.Once
+	client       http.Client
+	once         sync.Once
+	DownloadPath string
+	Mobile       string
+	Passwd       string
 }
 
 func (c *DailyPowerCrawler) Init(ctx context.Context) error {
@@ -61,15 +79,100 @@ func (c *DailyPowerCrawler) Init(ctx context.Context) error {
 	return nil
 }
 
-func (c *DailyPowerCrawler) Crawl(ctx context.Context) error {
+func (c *DailyPowerCrawler) Crawl(ctx context.Context, startDate, endDate time.Time) error {
 	if err := c.Init(ctx); err != nil {
 		return err
 	}
-	return nil
+	logId := uuid.NewString()
+	_, err := c.Logout(ctx, c.Mobile, logId)
+	if err != nil {
+		return err
+	}
+	time.Sleep(logoutInterval)
+	getCodeResp, err := c.GetCode(ctx, logId)
+	if err != nil {
+		return err
+	}
+	if !getCodeResp.IsOK() {
+		return fmt.Errorf(getCodeResp.RtnMsg)
+	}
+	randomCode := getCodeResp.RandomCode
+	time.Sleep(callInterval)
+	loginResp, err := c.Login(ctx, c.Mobile, c.Passwd, randomCode, logId)
+	if err != nil {
+		return err
+	}
+	if !loginResp.IsOK() {
+		return fmt.Errorf(loginResp.RtnMsg)
+	}
+	defer func() {
+		_, _ = c.Logout(ctx, c.Mobile, logId)
+
+	}()
+	end := endDate
+	start := startDate
+
+	downloadOpts := []DownloadOption{}
+	for cursor := end; !cursor.Before(start); cursor = cursor.AddDate(0, -1, 0) {
+		for page, total := 1, 2; page < total; page++ {
+			time.Sleep(callInterval)
+			queryResp, err := c.Query(ctx, loginResp, cursor, page, logId)
+			if err != nil {
+				return err
+			}
+			if !queryResp.IsOK() {
+				return fmt.Errorf(queryResp.RtnMsg)
+			}
+			total = int(math.Floor(float64(queryResp.TotalNum) / float64(defaultPageNumber)))
+			for i := range queryResp.ConsPqList {
+				consPq := queryResp.ConsPqList[i]
+				downloadOpts = append(downloadOpts, DownloadOption{
+					LoginInfo: loginResp,
+					QueryDate: cursor,
+					ConsRq:    consPq,
+					LogId:     logId,
+				})
+			}
+
+		}
+	}
+	log.Println("total", len(downloadOpts))
+	done := atomic.Int64{}
+	ctrlCh := make(chan struct{}, 8)
+	errCh := make(chan error, 8)
+	go func() {
+		defer close(ctrlCh)
+		defer close(errCh)
+		wg := sync.WaitGroup{}
+		for i := range downloadOpts {
+			downloadOpt := downloadOpts[i]
+			go func() {
+				wg.Add(1)
+				defer wg.Done()
+				ctrlCh <- struct{}{}
+				defer func() {
+					<-ctrlCh
+				}()
+				if err := c.Download(ctx, downloadOpt); err != nil {
+					errCh <- err
+				}
+				done.Add(1)
+				log.Println("done", done.Load())
+			}()
+		}
+		wg.Wait()
+
+	}()
+	var multiErr *multierror.Error
+	for err := range errCh {
+		multiErr = multierror.Append(multiErr, err)
+	}
+
+	return multiErr.ErrorOrNil()
 }
 
-func (c *DailyPowerCrawler) GetCode(ctx context.Context) (*GetCodeResp, error) {
-	param := NewRequest(NewGetCodeParam())
+func (c *DailyPowerCrawler) GetCode(ctx context.Context, logId string) (*GetCodeResp, error) {
+	param := NewRequest(NewGetCodeParam(logId))
 	buffer := bytes.NewBuffer(nil)
 	encoder := json.NewEncoder(buffer)
 	if err := encoder.Encode(param); err != nil {
@@ -92,6 +195,119 @@ func (c *DailyPowerCrawler) GetCode(ctx context.Context) (*GetCodeResp, error) {
 	}
 	return &getCodeResp.Data, nil
 
+}
+
+func (c *DailyPowerCrawler) Login(ctx context.Context, mobile, passwd, randomCode, logId string) (*LoginResp, error) {
+	param := NewRequest(NewLoginParam(mobile, passwd, randomCode, logId))
+	buffer := bytes.NewBuffer(nil)
+	encoder := json.NewEncoder(buffer)
+	if err := encoder.Encode(param); err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiUrl, buffer)
+	if err != nil {
+		return nil, err
+	}
+	WrapRequest(req)
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	decoder := json.NewDecoder(resp.Body)
+	logineResp := &Response[LoginResp]{}
+	if err := decoder.Decode(logineResp); err != nil {
+		return nil, err
+	}
+	return &logineResp.Data, nil
+}
+
+func (c *DailyPowerCrawler) Logout(ctx context.Context, mobile, logId string) (*LogoutResp, error) {
+	param := NewRequest(NewLogoutParam(mobile, logId))
+	buffer := bytes.NewBuffer(nil)
+	encoder := json.NewEncoder(buffer)
+	if err := encoder.Encode(param); err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiUrl, buffer)
+	if err != nil {
+		return nil, err
+	}
+	WrapRequest(req)
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	decoder := json.NewDecoder(resp.Body)
+	logoutResp := &Response[LogoutResp]{}
+	if err := decoder.Decode(logoutResp); err != nil {
+		return nil, err
+	}
+	return &logoutResp.Data, nil
+}
+
+func (c *DailyPowerCrawler) Query(ctx context.Context, loginInfo *LoginResp, queryDate time.Time,
+	page int, logId string) (*QueryResp, error) {
+	param := NewRequest(NewQueryParam(loginInfo, queryDate, page, logId))
+	buffer := bytes.NewBuffer(nil)
+	encoder := json.NewEncoder(buffer)
+	if err := encoder.Encode(param); err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiUrl, buffer)
+	if err != nil {
+		return nil, err
+	}
+	WrapRequest(req)
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	decoder := json.NewDecoder(resp.Body)
+	queryResp := &Response[QueryResp]{}
+	if err := decoder.Decode(queryResp); err != nil {
+		return nil, err
+	}
+	return &queryResp.Data, nil
+}
+
+func (c *DailyPowerCrawler) Download(ctx context.Context, downloadOpt DownloadOption) error {
+
+	queryDate := downloadOpt.QueryDate
+	consRq := downloadOpt.ConsRq
+	loginInfo := downloadOpt.LoginInfo
+	logId := downloadOpt.LogId
+	param := NewRequest(NewDownloadParam(loginInfo, queryDate, consRq, logId))
+	b, err := json.Marshal(param)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiUrl, nil)
+	if err != nil {
+		return err
+	}
+	q := req.URL.Query()
+	q.Add("jsonData", string(b))
+	req.URL.RawQuery = q.Encode()
+	WrapRequest(req)
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	f, err := os.Create(fmt.Sprintf("%s/%s-%s-%s.xls", c.DownloadPath, queryDate.Format("2006-01"), consRq.VoltCode, consRq.ConsName))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(f, resp.Body)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func WrapRequest(req *http.Request) {
