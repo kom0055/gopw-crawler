@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	defaultPageNumber = 10
+	defaultPageNumber = 100
 	queryDateFmt      = "2006-01-02"
 )
 

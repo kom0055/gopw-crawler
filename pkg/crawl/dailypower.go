@@ -112,9 +112,9 @@ func (c *DailyPowerCrawler) Crawl(ctx context.Context, startDate, endDate time.T
 	end := endDate
 	start := startDate
 
-	downloadOpts := map[string]DownloadOption{}
+	downloadOpts := []DownloadOption{}
 	for cursor := end; !cursor.Before(start); cursor = cursor.AddDate(0, -1, 0) {
-		for page, total := 1, 2; page < total; page++ {
+		for page, total := 1, 1; page <= total; page++ {
 			time.Sleep(callInterval)
 			queryResp, err := c.Query(ctx, loginResp, cursor, page, logId)
 			if err != nil {
@@ -123,18 +123,21 @@ func (c *DailyPowerCrawler) Crawl(ctx context.Context, startDate, endDate time.T
 			if !queryResp.IsOK() {
 				return fmt.Errorf(queryResp.RtnMsg)
 			}
-			total = int(math.Floor(float64(queryResp.TotalNum) / float64(defaultPageNumber)))
+			total = int(math.Ceil(float64(queryResp.TotalNum) / float64(defaultPageNumber)))
 			for i := range queryResp.ConsPqList {
 				consPq := queryResp.ConsPqList[i]
+				dir := fmt.Sprintf("%s/%s", c.DownloadPath, cursor.Format("2006-01"))
+				if err := os.MkdirAll(dir, 0777); err != nil {
+					return err
+				}
 				d := DownloadOption{
-					FileName:  fmt.Sprintf("%s/%s-%s-%s.xls", c.DownloadPath, cursor.Format("2006-01"), consPq.VoltCode, consPq.ConsName),
+					FileName:  fmt.Sprintf("%s/%s-%s-%s-%s.xls", dir, consPq.VoltCode, consPq.ConsName, consPq.OrgNo, consPq.ConsNo),
 					LoginInfo: loginResp,
 					QueryDate: cursor,
 					ConsRq:    consPq,
 					LogId:     logId,
 				}
-				downloadOpts[d.FileName] = d
-
+				downloadOpts = append(downloadOpts, d)
 			}
 
 		}

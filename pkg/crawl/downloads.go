@@ -10,7 +10,8 @@ import (
 func NewDownloadParam(loginInfo *LoginResp, queryDate time.Time, consRq ConsPq, logId string) Encodee {
 
 	y, m, _ := queryDate.Date()
-	startDate := time.Date(y, m, 0, 0, 0, 0, 0, time.Local)
+	end := time.Date(y, m, 1, 0, 0, 0, 0, time.Local)
+	end = end.AddDate(0, 1, -1)
 	return &DownloadParam{
 		BizParam:     NewBizParam(DownloadSrcCode, ChannelCodeGOPW, FuncCode54, IsToken1, IsBindSell1, HasRightTrue, logId),
 		EspFlowId:    strings.ReplaceAll(uuid.NewString(), "-", ""),
@@ -26,10 +27,10 @@ func NewDownloadParam(loginInfo *LoginResp, queryDate time.Time, consRq ConsPq, 
 		PageSize:     "20000",
 		EspInformation: EspInformation{
 			DevType:     "02",
-			BeginDate:   startDate.Format("2006-01-02"),
+			BeginDate:   queryDate.Format("2006-01-02"),
 			MgtOrgCode:  consRq.OrgNo,
 			CustNo:      consRq.ConsNo,
-			EndDate:     queryDate.Format("2006-01-02"),
+			EndDate:     end.Format("2006-01-02"),
 			MeasAssetNo: "",
 			DisplayType: "",
 			QueryType:   "",

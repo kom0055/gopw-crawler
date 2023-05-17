@@ -77,18 +77,21 @@ func (o *Options) Complete() error {
 	o.PassWD = encryptedPasswd
 	now := time.Now()
 	y, m, _ := now.Date()
-	o.Start = time.Date(y, m, 0, 0, 0, 0, 0, time.Local)
-	if len(o.StartDate) > 0 {
-		start, err := time.Parse(dateFmt, o.StartDate)
-		if err == nil {
-			o.Start = start
-		}
-	}
-	o.End = o.Start.AddDate(0, -6, 0)
+
+	o.End = time.Date(y, m, 1, 0, 0, 0, 0, time.Local)
+
 	if len(o.EndDate) > 0 {
 		end, err := time.Parse(dateFmt, o.EndDate)
 		if err == nil {
 			o.End = end
+		}
+	}
+
+	o.Start = o.End.AddDate(0, -6, 0)
+	if len(o.StartDate) > 0 {
+		start, err := time.Parse(dateFmt, o.StartDate)
+		if err == nil {
+			o.Start = start
 		}
 	}
 
